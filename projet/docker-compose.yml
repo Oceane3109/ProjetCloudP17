@@ -1,0 +1,62 @@
+name: cloud-s5-idp
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: idp-postgres
+    environment:
+      POSTGRES_DB: idp_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "2024"
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d idp_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  idp-api:
+    build:
+      context: ./backend/idp-api
+      dockerfile: Dockerfile
+    container_name: idp-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      APP_BOOTSTRAP_MANAGER_EMAIL: manager@local
+      APP_BOOTSTRAP_MANAGER_PASSWORD: manager
+      # Firebase sync - ton fichier est déjà dans ./secrets (monté ci-dessous)
+      APP_FIREBASE_SERVICE_ACCOUNT_PATH: file:/run/secrets/claud-eb464-firebase-adminsdk-fbsvc-1bc25c1b91.json
+      # APP_FIREBASE_PROJECT_ID: your-firebase-project-id
+    volumes:
+      - ./secrets:/run/secrets:ro
+    ports:
+      - "8084:8080"
+
+  tiles:
+    image: overv/openstreetmap-tile-server:2.3.0
+    container_name: osm-tiles
+    profiles: ["maps"]
+    ports:
+      - "8081:80"
+    volumes:
+      # Place le fichier PBF ici: ./maps/antananarivo.osm.pbf (voir README)
+      - ./maps/antananarivo.osm.pbf:/data/region.osm.pbf:ro
+      - tiles_data:/data/database
+      - tiles_tiles:/data/tiles
+    environment:
+      # Import au premier démarrage, puis passe à "skip" si tu veux accélérer les redémarrages
+      THREADS: 4
+      UPDATES: disabled
+    command: ["run"]
+
+volumes:
+  pg_data:
+  tiles_data:
+  tiles_tiles:
+

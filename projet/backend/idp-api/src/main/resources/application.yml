@@ -1,0 +1,29 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: idp-api
+  jackson:
+    serialization:
+      WRITE_DATES_AS_TIMESTAMPS: false
+
+app:
+  auth:
+    jwtSecret: "secure-me-during-exam-please-change!!" # >= 32 chars recommended
+    jwtTtlMinutes: 60
+    sessionTtlMinutes: 60
+    maxFailedAttempts: 3
+  firebase:
+    enabled: false
+    # serviceAccountPath: "file:C:/path/to/firebase-service-account.json"
+    # projectId: "your-firebase-project-id"
+    reportsCollection: "reports"
+  cors:
+    allowedOrigins:
+      - "http://localhost:5173"
+      - "http://localhost:5174"
+      - "http://localhost:8100"
+      - "http://localhost:8080"
+      - "http://localhost:8084"
+
