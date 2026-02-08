@@ -24,6 +24,9 @@ public class AppFirebaseProperties {
   /** Collection Firestore utilisée pour les signalements. */
   private String reportsCollection = "reports";
 
+  /** Bucket Storage pour les photos (ex: projectId.firebasestorage.app ou projectId.appspot.com). */
+  private String storageBucket;
+
   public boolean isEnabled() {
     return enabled;
   }
@@ -54,6 +57,14 @@ public class AppFirebaseProperties {
 
   public void setReportsCollection(String reportsCollection) {
     this.reportsCollection = reportsCollection;
+  }
+
+  public String getStorageBucket() {
+    return storageBucket;
+  }
+
+  public void setStorageBucket(String storageBucket) {
+    this.storageBucket = storageBucket;
   }
 }
 

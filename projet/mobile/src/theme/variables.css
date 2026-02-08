@@ -21,3 +21,23 @@
   --ion-border-color: rgba(15, 23, 42, 0.12);
 }
 
+ion-toast.big-center-toast {
+  --width: min(92vw, 460px);
+  --max-width: 92vw;
+  --border-radius: 16px;
+}
+
+ion-toast.big-center-toast::part(container) {
+  padding: 14px 16px;
+}
+
+ion-toast.big-center-toast::part(message) {
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+ion-toast.big-center-toast::part(header) {
+  font-size: 16px;
+  font-weight: 700;
+}
+

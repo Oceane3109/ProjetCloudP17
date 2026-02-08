@@ -61,6 +61,12 @@ Dossier: `mobile/`
 
 1) Copier `mobile/.env.example` vers `mobile/.env` et remplir la config Firebase Web.
 
+## Fichiers d'exemple et gestion des secrets
+
+- J'ai ajouté des exemples d'env: `backend/idp-api/.env.example` et `mobile/.env.example`.
+- `APP_JWT_SECRET` doit être défini (ou monter via Docker secret) pour éviter l'utilisation d'un secret par défaut.
+- Le dépôt ignore désormais le dossier `secrets/` via `.gitignore` — si vous avez déjà committé des fichiers sensibles, retirez-les de l'historique git.
+
 2) Lancer:
 
 ```bash
@@ -83,10 +89,15 @@ Dans `backend/idp-api/src/main/resources/application.yml`:
 - `app.firebase.serviceAccountPath`: chemin vers le JSON (ex: `file:C:/keys/firebase.json`)
 - `app.firebase.projectId` (optionnel)
 
+## Gestion des secrets
+
+- **Ne commitez jamais** de clés privées ou secrets (JWT secret, service account JSON) dans le dépôt.
+- Pour le secret JWT, définissez la variable d'environnement `APP_JWT_SECRET` sur la machine ou via un secret Docker.
+- Pour Firebase, montez le fichier `serviceAccount.json` comme secret/volume (ex: `/run/secrets/...`) et référencez-le via `APP_FIREBASE_SERVICE_ACCOUNT_PATH`.
+
 ### Endpoints (Manager)
 
 - **Backend → Firebase**: `POST /api/admin/sync/firebase/reports/push`
 - **Firebase → Backend**: `POST /api/admin/sync/firebase/reports/pull`
 
 Ces endpoints nécessitent un JWT avec rôle `MANAGER`.
-

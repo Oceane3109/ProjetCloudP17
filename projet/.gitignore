@@ -1,3 +1,20 @@
+# OS / Editor
+/.vscode/
+.DS_Store
+Thumbs.db
+
+# Java
+/target/
+*.class
+
+# Node
+/node_modules/
+/web/dist/
+/mobile/node_modules/
+
+# Sensitive
+/secrets/
+.env
 .idea/
 .vscode/
 *.iml

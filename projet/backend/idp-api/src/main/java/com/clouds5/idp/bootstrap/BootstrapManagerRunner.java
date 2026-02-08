@@ -33,7 +33,18 @@ public class BootstrapManagerRunner implements CommandLineRunner {
         .findByEmailIgnoreCase(email)
         .ifPresentOrElse(
             u -> {
-              // si le compte existe déjà, on ne touche pas
+              boolean changed = false;
+              if (u.getRole() != Role.MANAGER) {
+                u.setRole(Role.MANAGER);
+                changed = true;
+              }
+              // En environnement d'exam/dev, on garde le compte cohérent avec les variables d'env
+              // (évite les 403 si un compte existait avec un autre mot de passe)
+              if (managerPassword != null && !managerPassword.isBlank()) {
+                u.setPasswordHash(encoder.encode(managerPassword));
+                changed = true;
+              }
+              if (changed) users.save(u);
             },
             () -> {
               var u = new User();

@@ -12,6 +12,8 @@ import java.math.BigDecimal;
  */
 public record UpdateReportRequest(
     String status,
+    String type,
+    String companyName,
     @DecimalMin("0") BigDecimal surfaceM2,
     @DecimalMin("0") BigDecimal budgetAmount,
     @Min(0) @Max(100) Integer progressPercent) {}

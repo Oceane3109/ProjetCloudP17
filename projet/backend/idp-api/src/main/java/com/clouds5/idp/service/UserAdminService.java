@@ -1,6 +1,7 @@
 package com.clouds5.idp.service;
 
 import com.clouds5.idp.exception.ApiException;
+import com.clouds5.idp.model.Role;
 import com.clouds5.idp.model.User;
 import com.clouds5.idp.repo.UserRepository;
 import java.util.List;
@@ -17,6 +18,22 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserAdminService {
   private final UserRepository users;
   private final PasswordEncoder encoder;
+
+  @Transactional
+  public User createUser(String email, String password) {
+    var normalized = email.trim().toLowerCase(Locale.ROOT);
+    if (users.existsByEmailIgnoreCase(normalized)) {
+      throw new ApiException(HttpStatus.CONFLICT, "Email déjà utilisé");
+    }
+    var u = new User();
+    u.setEmail(normalized);
+    u.setPasswordHash(encoder.encode(password));
+    u.setRole(Role.UTILISATEUR);
+    u.setFailedLoginAttempts(0);
+    u.setLocked(false);
+    u.setLockedAt(null);
+    return users.save(u);
+  }
 
   @Transactional(readOnly = true)
   public List<User> listLocked() {

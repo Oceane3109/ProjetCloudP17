@@ -29,3 +29,23 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+api.interceptors.response.use(
+  (resp) => resp,
+  async (err) => {
+    const status = err?.response?.status;
+    // Après un rebuild backend (jwt secret / sessions), l'ancien token peut devenir invalide.
+    if (status === 401 || status === 403) {
+      try {
+        const auth = useAuthStore();
+        auth.accessToken = "";
+        auth.role = "";
+        auth.expiresAt = "";
+        localStorage.removeItem("auth");
+      } catch {
+        // ignore
+      }
+    }
+    return Promise.reject(err);
+  }
+);
+

@@ -23,6 +23,9 @@ services:
       context: ./backend/idp-api
       dockerfile: Dockerfile
     container_name: idp-api
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     depends_on:
       postgres:
         condition: service_healthy
@@ -30,11 +33,14 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       APP_BOOTSTRAP_MANAGER_EMAIL: manager@local
       APP_BOOTSTRAP_MANAGER_PASSWORD: manager
-      # Firebase sync - ton fichier est déjà dans ./secrets (monté ci-dessous)
+      # Firebase sync + upload photos (mobile)
       APP_FIREBASE_SERVICE_ACCOUNT_PATH: file:/run/secrets/claud-eb464-firebase-adminsdk-fbsvc-1bc25c1b91.json
-      # APP_FIREBASE_PROJECT_ID: your-firebase-project-id
+      APP_FIREBASE_PROJECT_ID: claud-eb464
+      APP_FIREBASE_STORAGE_BUCKET: claud-eb464.appspot.com
+      APP_UPLOAD_DIR: /data/uploads
     volumes:
       - ./secrets:/run/secrets:ro
+      - uploads_data:/data/uploads
     ports:
       - "8084:8080"
 
@@ -46,7 +52,7 @@ services:
       - "8081:80"
     volumes:
       # Place le fichier PBF ici: ./maps/antananarivo.osm.pbf (voir README)
-      - ./maps/antananarivo.osm.pbf:/data/region.osm.pbf:ro
+      - ./maps/antananarivo.osm.pbf:/data.osm.pbf:ro
       - tiles_data:/data/database
       - tiles_tiles:/data/tiles
     environment:
@@ -55,8 +61,23 @@ services:
       UPDATES: disabled
     command: ["run"]
 
+  tiles-import:
+    image: overv/openstreetmap-tile-server:2.3.0
+    container_name: osm-tiles-import
+    profiles: ["maps-import"]
+    volumes:
+      # Place le fichier PBF ici: ./maps/antananarivo.osm.pbf (voir README)
+      - ./maps/antananarivo.osm.pbf:/data.osm.pbf:ro
+      - tiles_data:/data/database
+      - tiles_tiles:/data/tiles
+    environment:
+      THREADS: 4
+      UPDATES: disabled
+    command: ["import"]
+
 volumes:
   pg_data:
+  uploads_data:
   tiles_data:
   tiles_tiles:
 

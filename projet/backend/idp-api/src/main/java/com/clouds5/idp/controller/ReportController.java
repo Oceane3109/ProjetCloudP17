@@ -77,6 +77,9 @@ public class ReportController {
     return new ReportResponse(
         r.getId(),
         r.getUser() != null ? r.getUser().getId() : null,
+        r.getType() != null ? r.getType().name() : "OTHER",
+        r.getCompanyName(),
+        r.getPhotoUrls() != null ? r.getPhotoUrls() : java.util.List.of(),
         r.getTitle(),
         r.getDescription(),
         r.getLatitude(),
@@ -85,7 +88,10 @@ public class ReportController {
         r.getSurfaceM2(),
         r.getBudgetAmount(),
         r.getProgressPercent(),
-        r.getCreatedAt());
+        r.getCreatedAt(),
+        r.getStatusNewAt(),
+        r.getStatusInProgressAt(),
+        r.getStatusDoneAt());
   }
 }
 

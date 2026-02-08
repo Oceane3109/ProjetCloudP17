@@ -5,6 +5,7 @@ import com.clouds5.idp.dto.SyncResultResponse;
 import com.clouds5.idp.exception.ApiException;
 import com.clouds5.idp.model.Report;
 import com.clouds5.idp.model.ReportStatus;
+import com.clouds5.idp.model.ReportType;
 import com.clouds5.idp.repo.ReportRepository;
 import com.clouds5.idp.repo.UserRepository;
 import com.google.api.core.ApiFuture;
@@ -20,19 +21,24 @@ import com.google.firebase.cloud.FirestoreClient;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class FirebaseSyncService {
@@ -44,6 +50,11 @@ public class FirebaseSyncService {
   private final ResourceLoader resourceLoader;
 
   private volatile Firestore firestore;
+
+  /** Force l'initialisation Firebase (ex: pour l'upload Storage avant tout sync). */
+  public void ensureInitialized() {
+    firestore();
+  }
 
   private Firestore firestore() {
     if (!firebaseProps.isEnabled()) {
@@ -74,6 +85,9 @@ public class FirebaseSyncService {
         if (firebaseProps.getProjectId() != null && !firebaseProps.getProjectId().isBlank()) {
           builder.setProjectId(firebaseProps.getProjectId().trim());
         }
+        if (firebaseProps.getStorageBucket() != null && !firebaseProps.getStorageBucket().isBlank()) {
+          builder.setStorageBucket(firebaseProps.getStorageBucket().trim());
+        }
         FirebaseOptions options = builder.build();
 
         FirebaseApp app =
@@ -103,12 +117,17 @@ public class FirebaseSyncService {
     List<Report> all = reports.findAll();
     int processed = 0;
     int skipped = 0;
-    int createdOrUpdated = 0;
+    int created = 0;
+    int updated = 0;
+    int deleted = 0;
 
     try {
       CollectionReference col = reportsCollection();
       WriteBatch batch = firestore().batch();
       int batchCount = 0;
+
+      // Pour gérer les suppressions: tous les IDs backend présents.
+      Set<String> backendIds = new HashSet<>();
 
       for (Report r : all) {
         processed++;
@@ -117,7 +136,29 @@ public class FirebaseSyncService {
           continue;
         }
 
+        String docId = r.getId().toString();
+        backendIds.add(docId);
+
+        // Pour created/updated: check existence dans Firestore.
+        boolean existed = false;
+
+        // Garder le userId original (ex: Firebase uid) si déjà présent dans Firestore,
+        // sinon utiliser l'UUID backend. Permet au mobile de reconnaître ses reports.
+        String existingUserId = null;
+        try {
+          DocumentSnapshot docSnap = col.document(docId).get().get();
+          if (docSnap.exists()) {
+            existed = true;
+            existingUserId = docSnap.getString("userId");
+          }
+        } catch (InterruptedException | ExecutionException e) {
+          log.warn("[Firebase Push] Impossible de lire le userId existant pour le report {}", r.getId(), e);
+        }
+
         Map<String, Object> doc = new HashMap<>();
+        doc.put("type", r.getType() != null ? r.getType().name() : ReportType.OTHER.name());
+        doc.put("companyName", r.getCompanyName());
+        doc.put("photoUrls", r.getPhotoUrls() != null ? r.getPhotoUrls() : List.of());
         doc.put("title", r.getTitle());
         doc.put("description", r.getDescription());
         doc.put("latitude", r.getLatitude());
@@ -126,12 +167,17 @@ public class FirebaseSyncService {
         doc.put("surfaceM2", r.getSurfaceM2() != null ? r.getSurfaceM2().toPlainString() : null);
         doc.put("budgetAmount", r.getBudgetAmount() != null ? r.getBudgetAmount().toPlainString() : null);
         doc.put("progressPercent", r.getProgressPercent());
-        doc.put("userId", r.getUser() != null ? r.getUser().getId().toString() : null);
+        doc.put("userId", existingUserId != null ? existingUserId : (r.getUser() != null ? r.getUser().getId().toString() : null));
         doc.put("createdAt", r.getCreatedAt() != null ? Date.from(r.getCreatedAt()) : null);
+        doc.put("statusNewAt", r.getStatusNewAt() != null ? Date.from(r.getStatusNewAt()) : null);
+        doc.put("statusInProgressAt", r.getStatusInProgressAt() != null ? Date.from(r.getStatusInProgressAt()) : null);
+        doc.put("statusDoneAt", r.getStatusDoneAt() != null ? Date.from(r.getStatusDoneAt()) : null);
 
-        batch.set(col.document(r.getId().toString()), doc);
+        log.info("[Firebase Push] Report {} (title: {}, status: {}, userId: {})", r.getId(), r.getTitle(), r.getStatus(), existingUserId != null ? existingUserId : (r.getUser() != null ? r.getUser().getId() : null));
+        batch.set(col.document(docId), doc);
         batchCount++;
-        createdOrUpdated++;
+        if (existed) updated++;
+        else created++;
 
         if (batchCount >= 450) {
           batch.commit().get();
@@ -141,7 +187,28 @@ public class FirebaseSyncService {
       }
 
       if (batchCount > 0) batch.commit().get();
-      return new SyncResultResponse(processed, 0, createdOrUpdated, skipped);
+
+      // Suppressions: supprimer de Firebase les docs absents du backend
+      ApiFuture<QuerySnapshot> existingSnapFut = col.get();
+      QuerySnapshot existingSnap = existingSnapFut.get();
+      WriteBatch delBatch = firestore().batch();
+      int delBatchCount = 0;
+      for (DocumentSnapshot d : existingSnap.getDocuments()) {
+        String id = d.getId();
+        if (!backendIds.contains(id)) {
+          delBatch.delete(col.document(id));
+          deleted++;
+          delBatchCount++;
+          if (delBatchCount >= 450) {
+            delBatch.commit().get();
+            delBatch = firestore().batch();
+            delBatchCount = 0;
+          }
+        }
+      }
+      if (delBatchCount > 0) delBatch.commit().get();
+
+      return new SyncResultResponse(processed, created, updated, deleted, skipped);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Firebase push interrompu");
@@ -158,7 +225,10 @@ public class FirebaseSyncService {
       int processed = 0;
       int created = 0;
       int updated = 0;
+      int deleted = 0;
       int skipped = 0;
+
+      Set<UUID> firebaseIds = new HashSet<>();
 
       for (DocumentSnapshot doc : snap.getDocuments()) {
         processed++;
@@ -169,6 +239,8 @@ public class FirebaseSyncService {
           skipped++;
           continue;
         }
+
+        firebaseIds.add(id);
 
         Report r = reports.findById(id).orElseGet(() -> {
           Report nr = new Report();
@@ -182,6 +254,9 @@ public class FirebaseSyncService {
         r.setLatitude(asDouble(doc.get("latitude"), 0));
         r.setLongitude(asDouble(doc.get("longitude"), 0));
         r.setStatus(parseStatus(asString(doc.get("status"), ReportStatus.NEW.name())));
+        r.setType(parseType(asString(doc.get("type"), ReportType.OTHER.name()), r.getTitle()));
+        r.setCompanyName(asStringOrNull(doc.get("companyName")));
+        r.setPhotoUrls(asStringList(doc.get("photoUrls")));
         r.setSurfaceM2(asBigDecimalOrNull(doc.get("surfaceM2")));
         r.setBudgetAmount(asBigDecimalOrNull(doc.get("budgetAmount")));
         r.setProgressPercent(asIntegerOrNull(doc.get("progressPercent")));
@@ -200,12 +275,33 @@ public class FirebaseSyncService {
         Instant createdAt = asInstantOrNull(doc.get("createdAt"));
         if (createdAt != null) r.setCreatedAt(createdAt);
 
+        Instant statusNewAt = asInstantOrNull(doc.get("statusNewAt"));
+        if (statusNewAt != null) r.setStatusNewAt(statusNewAt);
+        Instant statusInProgressAt = asInstantOrNull(doc.get("statusInProgressAt"));
+        if (statusInProgressAt != null) r.setStatusInProgressAt(statusInProgressAt);
+        Instant statusDoneAt = asInstantOrNull(doc.get("statusDoneAt"));
+        if (statusDoneAt != null) r.setStatusDoneAt(statusDoneAt);
+
         reports.save(r);
+        // Sécurité: si la stratégie d'ID génère/normalise un UUID au save,
+        // on s'assure de ne jamais supprimer le report qu'on vient d'importer.
+        if (r.getId() != null) firebaseIds.add(r.getId());
         if (isNew) created++;
         else updated++;
       }
 
-      return new SyncResultResponse(processed, created, updated, skipped);
+      // Suppressions miroir: si un report existe en DB mais plus dans Firebase, on le supprime.
+      // Cela évite la "résurrection" des anciens signalements lors d'un pull après purge.
+      List<Report> existingDb = reports.findAll();
+      for (Report r : existingDb) {
+        if (r.getId() == null) continue;
+        if (!firebaseIds.contains(r.getId())) {
+          reports.deleteById(r.getId());
+          deleted++;
+        }
+      }
+
+      return new SyncResultResponse(processed, created, updated, deleted, skipped);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Firebase pull interrompu");
@@ -282,6 +378,39 @@ public class FirebaseSyncService {
     } catch (Exception e) {
       return ReportStatus.NEW;
     }
+  }
+
+  private static ReportType parseType(String raw, String title) {
+    try {
+      return ReportType.valueOf(raw);
+    } catch (Exception e) {
+      // fallback: infère depuis titre si possible
+      if (title == null) return ReportType.OTHER;
+      String t = title.toLowerCase();
+      if (t.contains("trou") || t.contains("nid")) return ReportType.POTHOLE;
+      if (t.contains("travaux") || t.contains("chantier")) return ReportType.ROADWORK;
+      if (t.contains("inond")) return ReportType.FLOOD;
+      if (t.contains("eboul") || t.contains("ecroul") || t.contains("glissement")) return ReportType.LANDSLIDE;
+      return ReportType.OTHER;
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static List<String> asStringList(Object v) {
+    if (v == null) return new ArrayList<>();
+    if (v instanceof List<?> list) {
+      var out = new ArrayList<String>();
+      for (Object o : list) {
+        if (o == null) continue;
+        String s = o.toString().trim();
+        if (!s.isBlank()) out.add(s);
+      }
+      return out;
+    }
+    // fallback si c'est une string unique
+    String s = v.toString().trim();
+    if (s.isBlank()) return new ArrayList<>();
+    return new ArrayList<>(List.of(s));
   }
 }
 

@@ -4,21 +4,32 @@ server:
 spring:
   application:
     name: idp-api
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
   jackson:
     serialization:
       WRITE_DATES_AS_TIMESTAMPS: false
 
 app:
   auth:
-    jwtSecret: "secure-me-during-exam-please-change!!" # >= 32 chars recommended
+    # IMPORTANT: ne pas committer de secret en clair. En production, définir
+    # la variable d'environnement `APP_JWT_SECRET` (>= 32 caractères).
+    # Valeur par défaut fournie uniquement pour développement local.
+    jwtSecret: "${APP_JWT_SECRET:secure-me-during-exam-please-change!!}" # >= 32 chars recommended
     jwtTtlMinutes: 60
     sessionTtlMinutes: 60
     maxFailedAttempts: 3
   firebase:
     enabled: false
-    # serviceAccountPath: "file:C:/path/to/firebase-service-account.json"
-    # projectId: "your-firebase-project-id"
+    # Pour upload photos (mobile) depuis localhost : enabled=true + serviceAccountPath + storageBucket
+    # serviceAccountPath: "file:../secrets/claud-eb464-firebase-adminsdk-fbsvc-1bc25c1b91.json"
+    # projectId: "claud-eb464"
+    # storageBucket: "claud-eb464.firebasestorage.app"
     reportsCollection: "reports"
+  upload:
+    dir: "uploads"
   cors:
     allowedOrigins:
       - "http://localhost:5173"

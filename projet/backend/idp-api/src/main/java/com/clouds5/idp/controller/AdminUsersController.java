@@ -1,6 +1,7 @@
 package com.clouds5.idp.controller;
 
 import com.clouds5.idp.dto.AdminUserResponse;
+import com.clouds5.idp.dto.AdminCreateUserRequest;
 import com.clouds5.idp.dto.UnlockByEmailRequest;
 import com.clouds5.idp.model.User;
 import com.clouds5.idp.service.UserAdminService;
@@ -24,6 +25,13 @@ import org.springframework.web.bind.annotation.RestController;
 @SecurityRequirement(name = "bearerAuth")
 public class AdminUsersController {
   private final UserAdminService userAdminService;
+
+  @PostMapping
+  @PreAuthorize("hasRole('MANAGER')")
+  public ResponseEntity<AdminUserResponse> createUser(@Valid @RequestBody AdminCreateUserRequest req) {
+    var u = userAdminService.createUser(req.email(), req.password());
+    return ResponseEntity.ok(toDto(u));
+  }
 
   @GetMapping("/locked")
   @PreAuthorize("hasRole('MANAGER')")

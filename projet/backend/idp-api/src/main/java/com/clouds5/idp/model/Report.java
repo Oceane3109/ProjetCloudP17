@@ -12,17 +12,18 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.UuidGenerator;
 
 @Getter
 @Setter
 @Entity
 @Table(name = "reports")
 public class Report {
-  @Id @UuidGenerator private UUID id;
+  @Id private UUID id;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "user_id")
@@ -44,6 +45,17 @@ public class Report {
   @Column(nullable = false, length = 32)
   private ReportStatus status = ReportStatus.NEW;
 
+  @Enumerated(EnumType.STRING)
+  @Column(nullable = false, length = 32)
+  private ReportType type = ReportType.OTHER;
+
+  @Column(name = "company_name", length = 200)
+  private String companyName;
+
+  @jakarta.persistence.Convert(converter = StringListJsonConverter.class)
+  @Column(name = "photo_urls", columnDefinition = "text")
+  private List<String> photoUrls = new ArrayList<>();
+
   @Column(name = "surface_m2", precision = 12, scale = 2)
   private BigDecimal surfaceM2;
 
@@ -56,9 +68,20 @@ public class Report {
   @Column(name = "created_at", nullable = false)
   private Instant createdAt;
 
+  @Column(name = "status_new_at")
+  private Instant statusNewAt;
+
+  @Column(name = "status_in_progress_at")
+  private Instant statusInProgressAt;
+
+  @Column(name = "status_done_at")
+  private Instant statusDoneAt;
+
   @PrePersist
   void onCreate() {
+    if (id == null) id = UUID.randomUUID();
     if (createdAt == null) createdAt = Instant.now();
+    if (statusNewAt == null) statusNewAt = createdAt;
   }
 }
 
