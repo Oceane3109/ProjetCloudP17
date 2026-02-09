@@ -47,7 +47,7 @@ npm run dev
 - **Host**: `localhost`
 - **Port**: `5432`
 - **User**: `postgres`
-- **Password**: `2024`
+- **Password**: `Asfuck.2004`
 - **Database**: `idp_db`
 
 ### Comptes / rôles

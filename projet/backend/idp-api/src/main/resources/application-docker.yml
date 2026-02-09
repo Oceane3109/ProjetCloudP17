@@ -6,7 +6,7 @@ spring:
   datasource:
     url: jdbc:postgresql://postgres:5432/idp_db
     username: postgres
-    password: "2024"
+    password: "Asfuck.2004"
   jpa:
     hibernate:
       ddl-auto: validate

@@ -415,6 +415,7 @@ async function firebasePush() {
 
 async function save(id: string) {
   error.value = "";
+  syncOk.value = "";
   loading.value = true;
   try {
     const row = edit.value[id];
@@ -427,6 +428,13 @@ async function save(id: string) {
       progressPercent: row.progressPercent
     });
     await refresh();
+    // Auto-push vers Firebase pour que le mobile reçoive la mise à jour
+    try {
+      const { data } = await api.post("/api/admin/sync/firebase/reports/push");
+      syncOk.value = `Push auto OK (${data.updated} mis à jour)`;
+    } catch {
+      // non bloquant : la sauvegarde backend a réussi
+    }
   } catch (e: any) {
     error.value = toNiceError(e, "Erreur modification");
   } finally {
@@ -436,10 +444,17 @@ async function save(id: string) {
 
 async function remove(id: string) {
   error.value = "";
+  syncOk.value = "";
   loading.value = true;
   try {
     await api.delete(`/api/reports/${id}`);
     await refresh();
+    // Auto-push vers Firebase pour supprimer aussi côté mobile
+    try {
+      await api.post("/api/admin/sync/firebase/reports/push");
+    } catch {
+      // non bloquant
+    }
   } catch (e: any) {
     error.value = toNiceError(e, "Erreur suppression");
   } finally {

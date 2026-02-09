@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: idp_db
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: "2024"
+      POSTGRES_PASSWORD: "Asfuck.2004"
     ports:
       - "5432:5432"
     volumes:
@@ -51,12 +51,9 @@ services:
     ports:
       - "8081:80"
     volumes:
-      # Place le fichier PBF ici: ./maps/antananarivo.osm.pbf (voir README)
-      - ./maps/antananarivo.osm.pbf:/data.osm.pbf:ro
       - tiles_data:/data/database
       - tiles_tiles:/data/tiles
     environment:
-      # Import au premier démarrage, puis passe à "skip" si tu veux accélérer les redémarrages
       THREADS: 4
       UPDATES: disabled
     command: ["run"]
@@ -66,13 +63,13 @@ services:
     container_name: osm-tiles-import
     profiles: ["maps-import"]
     volumes:
-      # Place le fichier PBF ici: ./maps/antananarivo.osm.pbf (voir README)
-      - ./maps/antananarivo.osm.pbf:/data.osm.pbf:ro
       - tiles_data:/data/database
       - tiles_tiles:/data/tiles
     environment:
       THREADS: 4
       UPDATES: disabled
+      DOWNLOAD_PBF: https://download.geofabrik.de/africa/madagascar-latest.osm.pbf
+      DOWNLOAD_POLY: https://download.geofabrik.de/africa/madagascar.poly
     command: ["import"]
 
 volumes:
