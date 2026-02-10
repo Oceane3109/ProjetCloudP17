@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/auth.tsx","./src/firebase.ts","./src/ionic-react-router.d.ts","./src/leafletfix.ts","./src/main.tsx","./src/types.ts","./src/pages/createreportpage.tsx","./src/pages/loginpage.tsx","./src/pages/mappage.tsx","./src/pages/minepage.tsx","./src/pages/registerpage.tsx"],"version":"5.9.3"}

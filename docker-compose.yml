@@ -1,0 +1,88 @@
+name: cloud-s5-idp
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: idp-postgres
+    environment:
+      POSTGRES_DB: idp_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "Asfuck.2004"
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d idp_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  idp-api:
+    build:
+      context: ./backend/idp-api
+      dockerfile: Dockerfile
+    container_name: idp-api
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      APP_BOOTSTRAP_MANAGER_EMAIL: manager@local
+      APP_BOOTSTRAP_MANAGER_PASSWORD: manager
+      # Firebase sync + upload photos (mobile)
+      APP_FIREBASE_SERVICE_ACCOUNT_PATH: file:/run/secrets/claud-eb464-firebase-adminsdk-fbsvc-1bc25c1b91.json
+      APP_FIREBASE_PROJECT_ID: claud-eb464
+      APP_FIREBASE_STORAGE_BUCKET: claud-eb464.appspot.com
+      APP_UPLOAD_DIR: /data/uploads
+    volumes:
+      - ./secrets:/run/secrets:ro
+      - uploads_data:/data/uploads
+    ports:
+      - "8084:8080"
+
+  tiles:
+    image: overv/openstreetmap-tile-server:2.3.0
+    container_name: osm-tiles
+    profiles: ["maps"]
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    ports:
+      - "8081:80"
+    volumes:
+      - tiles_data_v2:/data/database
+      - tiles_tiles_v2:/data/tiles
+    environment:
+      THREADS: 4
+      UPDATES: disabled
+    command: ["run"]
+
+  tiles-import:
+    image: overv/openstreetmap-tile-server:2.3.0
+    container_name: osm-tiles-import
+    profiles: ["maps-import"]
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    volumes:
+      - tiles_data_v2:/data/database
+      - tiles_tiles_v2:/data/tiles
+    environment:
+      THREADS: 4
+      UPDATES: disabled
+      DOWNLOAD_PBF: https://download.geofabrik.de/africa/madagascar-latest.osm.pbf
+      DOWNLOAD_POLY: https://download.geofabrik.de/africa/madagascar.poly
+    command: ["import"]
+
+volumes:
+  pg_data:
+  uploads_data:
+  tiles_data:
+  tiles_tiles:
+  tiles_data_v2:
+  tiles_tiles_v2:
+
